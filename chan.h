@@ -12,43 +12,59 @@ using std::queue;
 using std::unique_lock;
 
 template <typename T> class Chan {
+  // buffered queue properties
   queue<T> que;
   mutable mutex mtx;
-  condition_variable cond;
+  condition_variable r_cond;
+  condition_variable w_cond;
 
-  const size_t quota;
+  int r_waiting;
+  int w_waiting;
+  const size_t capacity;
   size_t passed;
 
 public:
-  Chan(size_t quota_) : quota(quota_), passed(0) {}
+  Chan(size_t quota_) : capacity(quota_), passed(0) {}
 
+  // semantic send in golang's channel
   inline void Push(const T &v) {
-    {
-      unique_lock<mutex> lock{mtx};
-      que.push(v);
+    unique_lock<mutex> lock(mtx);
+    // blocks until sth is removed since queue is full now.
+    while (que.size() == capacity) {
+      w_waiting++;
+      w_cond.wait(lock);
+      w_waiting--;
     }
-    cond.notify_one();
+
+    que.push(v);
+
+    if (r_waiting > 0) {
+      // singal waiting reader
+      r_cond.notify_all();
+    }
   }
 
+  // semantic recv in golang's channel
   inline bool Pop(T &v) {
-    unique_lock<mutex> lock{mtx};
-    if (passed == quota)
+    unique_lock<mutex> lock(mtx);
+    if (passed == capacity)
       return false;
+    while (que.empty() && passed < capacity) {
+      // wait until there is something to pop
+      r_waiting++;
+      r_cond.wait(lock);
+      r_waiting--;
+    }
 
-    while (que.empty() && passed < quota)
-      cond.wait(lock);
-
-    if (que.empty())
-      return false;
-
+    // remove first element in the queue
     v = que.front();
     que.pop();
     ++passed;
 
-    if (passed == quota)
-      cond.notify_all();
+    if (w_waiting > 0) {
+      w_cond.notify_all();
+    }
     return true;
   }
 };
-
 } // namespace ptio
