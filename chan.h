@@ -24,7 +24,8 @@ template <typename T> class Chan {
   size_t passed;
 
 public:
-  Chan(size_t quota_) : capacity(quota_), passed(0) {}
+  Chan(size_t quota_)
+      : capacity(quota_), passed(0), r_waiting(0), w_waiting(0) {}
 
   // semantic send in golang's channel
   inline void Push(const T &v) {
