@@ -66,5 +66,15 @@ public:
     }
     return true;
   }
+
+  inline int size() {
+    unique_lock<mutex> lock(mtx);
+    return que.size();
+  }
+
+  inline int remaining() {
+    unique_lock<mutex> lock(mtx);
+    return capacity - passed;
+  }
 };
 } // namespace ptio
