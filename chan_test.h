@@ -13,7 +13,7 @@ void chan_push_test() {
 
   Chan<int> jobs(quota);
   for (int i = 0; i < quota; ++i)
-    jobs.Push(i);
+    jobs << i;
   assert(jobs.size() == quota);
   std::cout << "push test passed \n";
 }
@@ -23,10 +23,10 @@ void chan_pop_test() {
 
   Chan<int> jobs(quota);
   for (int i = 0; i < quota; ++i)
-    jobs.Push(i);
+    jobs << i;
   for (int i = 0; i < quota; ++i) {
     int job = -1;
-    jobs.Pop(job);
+    jobs >> i;
   }
 
   assert(jobs.remaining() == 0);
@@ -36,7 +36,7 @@ void chan_pop_test() {
 void chan_push_and_pop(int quota, int concurrent) {
   Chan<int> jobs(quota);
   for (int i = 0; i < quota; ++i)
-    jobs.Push(i);
+    jobs << i;
 
   Chan<int> loadeds(quota);
 
@@ -44,8 +44,8 @@ void chan_push_and_pop(int quota, int concurrent) {
   for (auto it = loaders.begin(); it != loaders.end(); ++it) {
     *it = thread([&] {
       int job = -1;
-      while (jobs.Pop(job)) {
-        loadeds.Push(job);
+      while (jobs >> job) {
+        jobs << job;
       }
     });
   }
@@ -56,7 +56,7 @@ void chan_push_and_pop(int quota, int concurrent) {
   for (auto it = workers.begin(); it != workers.end(); ++it) {
     *it = thread([&] {
       int job = -1;
-      while (loadeds.Pop(job))
+      while (loadeds >> job)
         ++counter;
     });
   }

@@ -24,36 +24,37 @@ template <typename T> class Chan {
 public:
   Chan(size_t quota_) : quota(quota_), passed(0) {}
 
-  // semantic send in golang's channel
-  inline void Push(const T &v) {
-    unique_lock<mutex> lock(mtx);
+  inline friend void operator<<(Chan &chan, T &v) {
+    unique_lock<mutex> lock(chan.mtx);
     // blocks until sth is removed since queue is full now.
-    while (que.size() == quota) {
-      w_cond.wait(lock);
+    while (chan.que.size() == chan.quota) {
+      chan.w_cond.wait(lock);
     }
 
-    que.push(v);
+    chan.que.push(v);
 
     // singal waiting reader
-    r_cond.notify_all();
+    chan.r_cond.notify_all();
+    // return chan;
   }
 
   // semantic recv in golang's channel
-  inline bool Pop(T &v) {
-    unique_lock<mutex> lock(mtx);
-    if (passed == quota)
+  inline friend bool operator>>(Chan &chan, T &v) {
+    unique_lock<mutex> lock(chan.mtx);
+    if (chan.passed == chan.quota)
       return false;
-    while (que.empty() && passed < quota) {
+    while (chan.que.empty() && chan.passed < chan.quota) {
       // wait until there is something to pop
-      r_cond.wait(lock);
+      chan.r_cond.wait(lock);
     }
 
     // remove first element in the queue
-    v = que.front();
-    que.pop();
-    ++passed;
+    v = chan.que.front();
+    chan.que.pop();
+    ++chan.passed;
 
-    w_cond.notify_all();
+    chan.w_cond.notify_all();
+
     return true;
   }
 
