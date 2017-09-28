@@ -11,45 +11,68 @@ using std::mutex;
 using std::queue;
 using std::unique_lock;
 
-template <typename T>
-class Chan {
-    queue<T> que;
-    mutable mutex mtx;
-    condition_variable cond;
+template <typename T> class Chan {
+  // buffered queue properties
+  queue<T> que;
+  mutable mutex mtx;
+  condition_variable r_cond;
+  condition_variable w_cond;
 
-    const size_t quota;
-    size_t passed;
+  const size_t quota;
+  const size_t capacity;
+  size_t passed;
 
 public:
-    Chan(size_t quota_) : quota(quota_), passed(0) {}
+  Chan(size_t quota_, size_t capacity_)
+      : quota(quota_), capacity(capacity_), passed(0) {}
 
-    inline void Push(const T &v) {
-        {
-            unique_lock<mutex> lock{mtx};
-            que.push(v);
-        }
-        cond.notify_one();
+  inline friend Chan &operator<<(Chan &chan, T &v) {
+    unique_lock<mutex> lock(chan.mtx);
+    // if chan already pass quota items, just stop push
+    // any new element
+    if (chan.passed == chan.quota) {
+      return chan;
+    }
+    // blocks until sth is removed since queue is full now.
+    while (chan.que.size() == chan.capacity) {
+      chan.w_cond.wait(lock);
     }
 
-    inline bool Pop(T &v) {
-        unique_lock<mutex> lock{mtx};
-        if (passed == quota)
-            return false;
+    chan.que.push(v);
 
-        while (que.empty() && passed < quota)
-            cond.wait(lock);
+    // singal waiting reader
+    chan.r_cond.notify_all();
+    return chan;
+  }
 
-        if (que.empty())
-            return false;
-
-        v = que.front();
-        que.pop();
-        ++passed;
-
-        if (passed == quota)
-            cond.notify_all();
-        return true;
+  // semantic recv in golang's channel
+  inline friend bool operator>>(Chan &chan, T &v) {
+    unique_lock<mutex> lock(chan.mtx);
+    if (chan.passed == chan.quota)
+      return false;
+    while (chan.que.empty()) {
+      // wait until there is something to pop
+      chan.r_cond.wait(lock);
     }
+
+    // remove first element in the queue
+    v = chan.que.front();
+    chan.que.pop();
+    ++chan.passed;
+
+    chan.w_cond.notify_all();
+
+    return true;
+  }
+
+  inline int size() {
+    unique_lock<mutex> lock(mtx);
+    return que.size();
+  }
+
+  inline int remaining() {
+    unique_lock<mutex> lock(mtx);
+    return quota - passed;
+  }
 };
-
-}
+} // namespace ptio
