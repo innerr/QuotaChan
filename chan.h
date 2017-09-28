@@ -24,7 +24,7 @@ template <typename T> class Chan {
 public:
   Chan(size_t quota_) : quota(quota_), passed(0) {}
 
-  inline friend void operator<<(Chan &chan, T &v) {
+  inline friend Chan &operator<<(Chan &chan, T &v) {
     unique_lock<mutex> lock(chan.mtx);
     // blocks until sth is removed since queue is full now.
     while (chan.que.size() == chan.quota) {
@@ -35,7 +35,7 @@ public:
 
     // singal waiting reader
     chan.r_cond.notify_all();
-    // return chan;
+    return chan;
   }
 
   // semantic recv in golang's channel

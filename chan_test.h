@@ -45,7 +45,7 @@ void chan_push_and_pop(int quota, int concurrent) {
     *it = thread([&] {
       int job = -1;
       while (jobs >> job) {
-        jobs << job;
+        loadeds << job;
       }
     });
   }
