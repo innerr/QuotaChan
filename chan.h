@@ -19,15 +19,22 @@ template <typename T> class Chan {
   condition_variable w_cond;
 
   const size_t quota;
+  const size_t capacity;
   size_t passed;
 
 public:
-  Chan(size_t quota_) : quota(quota_), passed(0) {}
+  Chan(size_t quota_, size_t capacity_)
+      : quota(quota_), capacity(capacity_), passed(0) {}
 
   inline friend Chan &operator<<(Chan &chan, T &v) {
     unique_lock<mutex> lock(chan.mtx);
+    // if chan already pass quota items, just stop push
+    // any new element
+    if (chan.passed == chan.quota) {
+      return chan;
+    }
     // blocks until sth is removed since queue is full now.
-    while (chan.que.size() == chan.quota) {
+    while (chan.que.size() == chan.capacity) {
       chan.w_cond.wait(lock);
     }
 
@@ -43,7 +50,7 @@ public:
     unique_lock<mutex> lock(chan.mtx);
     if (chan.passed == chan.quota)
       return false;
-    while (chan.que.empty() && chan.passed < chan.quota) {
+    while (chan.que.empty()) {
       // wait until there is something to pop
       chan.r_cond.wait(lock);
     }
