@@ -10,35 +10,36 @@ using namespace ptio;
 using std::atomic;
 void chan_push_test() {
   size_t quota = 10000;
+  size_t capacity = 100;
 
-  Chan<int> jobs(quota);
-  for (int i = 0; i < quota; ++i)
+  Chan<int> jobs(quota, capacity);
+  for (int i = 0; i < capacity; ++i)
     jobs << i;
-  assert(jobs.size() == quota);
+  assert(jobs.size() == capacity);
   std::cout << "push test passed \n";
 }
 
 void chan_pop_test() {
   size_t quota = 10000;
-
-  Chan<int> jobs(quota);
-  for (int i = 0; i < quota; ++i)
+  size_t capacity = 100;
+  Chan<int> jobs(quota, capacity);
+  for (int i = 0; i < capacity; ++i)
     jobs << i;
-  for (int i = 0; i < quota; ++i) {
+  for (int i = 0; i < capacity; ++i) {
     int job = -1;
     jobs >> i;
   }
 
-  assert(jobs.remaining() == 0);
+  assert(jobs.remaining() == (quota - capacity));
   std::cout << "pop test passed \n";
 }
 
 void chan_push_and_pop(int quota, int concurrent) {
-  Chan<int> jobs(quota);
+  Chan<int> jobs(quota, quota);
   for (int i = 0; i < quota; ++i)
     jobs << i;
 
-  Chan<int> loadeds(quota);
+  Chan<int> loadeds(quota, 100);
 
   vector<thread> loaders(concurrent);
   for (auto it = loaders.begin(); it != loaders.end(); ++it) {
