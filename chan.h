@@ -18,17 +18,17 @@ template <typename T> class Chan {
   condition_variable r_cond;
   condition_variable w_cond;
 
-  const size_t capacity;
+  const size_t quota;
   size_t passed;
 
 public:
-  Chan(size_t quota_) : capacity(quota_), passed(0) {}
+  Chan(size_t quota_) : quota(quota_), passed(0) {}
 
   // semantic send in golang's channel
   inline void Push(const T &v) {
     unique_lock<mutex> lock(mtx);
     // blocks until sth is removed since queue is full now.
-    while (que.size() == capacity) {
+    while (que.size() == quota) {
       w_cond.wait(lock);
     }
 
@@ -41,9 +41,9 @@ public:
   // semantic recv in golang's channel
   inline bool Pop(T &v) {
     unique_lock<mutex> lock(mtx);
-    if (passed == capacity)
+    if (passed == quota)
       return false;
-    while (que.empty() && passed < capacity) {
+    while (que.empty() && passed < quota) {
       // wait until there is something to pop
       r_cond.wait(lock);
     }
@@ -64,7 +64,7 @@ public:
 
   inline int remaining() {
     unique_lock<mutex> lock(mtx);
-    return capacity - passed;
+    return quota - passed;
   }
 };
 } // namespace ptio
