@@ -15,20 +15,25 @@ template <typename T>
 class Chan {
     queue<T> que;
     mutable mutex mtx;
-    condition_variable cond;
+
+    condition_variable cond_r;
+    condition_variable cond_w;
 
     const size_t quota;
+    const size_t capacity;
     size_t passed;
 
 public:
-    Chan(size_t quota_) : quota(quota_), passed(0) {}
+    inline Chan(size_t quota_, size_t capacity_) : quota(quota_), capacity(capacity_), passed(0) {}
 
     inline void Push(const T &v) {
         {
             unique_lock<mutex> lock{mtx};
+            if (capacity <= que.size() && passed < quota)
+                cond_w.wait(lock);
             que.push(v);
         }
-        cond.notify_one();
+        cond_r.notify_one();
     }
 
     inline bool Pop(T &v) {
@@ -37,7 +42,7 @@ public:
             return false;
 
         while (que.empty() && passed < quota)
-            cond.wait(lock);
+            cond_r.wait(lock);
 
         if (que.empty())
             return false;
@@ -46,8 +51,10 @@ public:
         que.pop();
         ++passed;
 
+        cond_w.notify_all();
+
         if (passed == quota)
-            cond.notify_all();
+            cond_r.notify_all();
         return true;
     }
 };
